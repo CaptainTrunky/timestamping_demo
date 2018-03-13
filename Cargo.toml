@@ -1,0 +1,12 @@
+[package]
+name = "timestamping"
+version = "0.1.0"
+authors = ["Sergey Bykov <captaintrunky@gmail.com>"]
+
+[dependencies]
+exonum = "0.6.0"
+iron = "0.6.0"
+bodyparser = "0.8.0"
+router = "0.6.0"
+serde = "1.0"
+serde_json = "1.0"
