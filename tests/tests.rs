@@ -31,7 +31,7 @@ fn test_submit_basic() {
     // Commit them into blockchain.
     testkit.create_block_with_transactions(
         txvec![tx1.clone(), tx2.clone(), tx3.clone()]
-        );
+    );
 
     // Check results with schema.
     let snapshot = testkit.snapshot();
