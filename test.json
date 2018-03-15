@@ -1,0 +1,12 @@
+{
+  "body": {
+    "content": "806f312994db8a3e92c5c20f35c6675bdb0693997f643d3d45e92eef8a5474c0",
+    "from": "95515a7ed3ed4e29800b4244a913af11066ecf01cb97ab129f33c0bfdc5ebd1d"
+  },
+  "message_id": 0,
+  "network_id": 0,
+  "protocol_version": 0,
+  "service_id": 13,
+  "signature": "27079a240fc75ffe019d74aa1c8c40d043faadbc128eff8e7a27ee3d985c2ded5552511e7d3096a795da7031fda7cc56c77e404e60d53e8d79d1f0649e829f07"
+}
+
