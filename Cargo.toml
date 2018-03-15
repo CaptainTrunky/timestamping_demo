@@ -15,4 +15,3 @@ time = "0.1.39"
 
 [dev-dependencies]
 exonum-testkit = {version = "0.6.0"}
-rand = "0.4"

@@ -15,11 +15,13 @@ extern crate serde_json;
 extern crate time;
 
 use exonum::api::{Api, ApiError};
-use exonum::blockchain::{Blockchain, Service, Transaction, ExecutionResult};
-use exonum::crypto::{gen_keypair, Hash, PublicKey, CryptoHash};
+use exonum::blockchain::{ApiContext, Blockchain, Service, Transaction,
+  TransactionSet, ExecutionResult};
+use exonum::crypto::{Hash, PublicKey};
+use exonum::encoding;
 use exonum::encoding::serialize::FromHex;
 use exonum::explorer::BlockchainExplorer;
-use exonum::messages::Message;
+use exonum::messages::{Message, RawTransaction};
 use exonum::node::{ApiSender, TransactionSend};
 use exonum::storage::{Fork, MapIndex, Snapshot};
 
@@ -36,7 +38,7 @@ const SERVICE_ID: u16 = 13;
 encoding_struct! {
     struct Timestamp {
         pub_key: &PublicKey,
-        msg: &str,
+        content: &Hash,
         time: u64,
     }
 }
@@ -47,7 +49,7 @@ transactions! {
 
         struct TxTimestamp {
             from: &PublicKey,
-            msg: &str,
+            content: &Hash,
         }
     }
 }
@@ -62,9 +64,7 @@ impl Transaction for TxTimestamp {
 
         if schema.timestamp(self.from()).is_none() {
             let now = time::precise_time_s() as u64;
-            let timestamp = Timestamp::new(self.from(), self.msg(), now);
-
-            println!("Create the timestamp: {:?}", timestamp);
+            let timestamp = Timestamp::new(self.from(), self.content(), now);
 
             schema.timestamps_mut().put(self.from(), timestamp);
         }
@@ -117,6 +117,27 @@ impl Api for TimestampApi {
 }
 
 impl TimestampApi {
+    fn set_timestamp(self, router: &mut Router) {
+        println!("ololo");
+        let timestamp = move |req: &mut Request| self.timestamp(req);
+        router.get("/v1/timestamp/:pub_key", timestamp, "timestamp");
+    }
+
+    fn set_timestamps(self, router: &mut Router) {
+        let timestamps = move |req: &mut Request| self.timestamps(req);
+        router.get("/v1/timestamps", timestamps, "timestamps");
+    }
+
+    fn set_submit(self, router: &mut Router) {
+        let submit = move |req: &mut Request| self.submit(req);
+        router.post("/v1/submit", submit, "submit");
+    }
+
+    fn set_block_stats(self, router: &mut Router) {
+        let stats = move |req: &mut Request| self.block_stats(req);
+        router.get("/v1/block_stats/:id", stats, "block_stats");
+    }
+
     fn submit(&self, req: &mut Request) -> IronResult<Response> {
         match req.get::<bodyparser::Struct<TimestampServiceTransactions>>() {
             Ok(Some(transaction)) => {
@@ -133,8 +154,7 @@ impl TimestampApi {
 
     fn timestamp(&self, req: &mut Request) -> IronResult<Response> {
         let path = req.url.path();
-        let key = path.last().unwrap();
-        let public_key = PublicKey::from_hex(key).map_err(
+        let public_key = PublicKey::from_hex(path.last().unwrap()).map_err(
             |e| {
                 IronError::new(e, (
                         Status::BadRequest,
@@ -158,7 +178,7 @@ impl TimestampApi {
         }
     }
 
-    fn timestamps(&self, req: &mut Request) -> IronResult<Response> {
+    fn timestamps(&self, _: &mut Request) -> IronResult<Response> {
         let snapshot = self.blockchain.snapshot();
         let schema = TimestampSchema::new(snapshot);
         let idx = schema.timestamps();
@@ -184,28 +204,35 @@ impl TimestampApi {
             }
         }
     }
-
-    fn set_timestamp(self, router: &mut Router) {
-        let timestamp = move |req: &mut Request| self.timestamp(req);
-        router.get("/v1/timestamp/:pub_key", timestamp, "timestamp");
-    }
-
-    fn set_timestamps(self, router: &mut Router) {
-        let timestamps = move |req: &mut Request| self.timestamps(req);
-        router.get("/v1/timestamps", timestamps, "timestamps");
-    }
-
-    fn set_submit(self, router: &mut Router) {
-        let submit = move |req: &mut Request| self.submit(req);
-        router.post("/v1/submit", submit, "submit");
-    }
-
-    fn set_block_stats(self, router: &mut Router) {
-        let stats = move |req: &mut Request| self.block_stats(req);
-        router.get("/v1/block_stats/:id", stats, "block_stats");
-    }
 }
 
-fn main() {
-  println!("waka-waka");
+pub struct TimestampService;
+
+impl Service for TimestampService {
+    fn service_name(&self) -> &'static str {
+        "timestamp"
+    }
+
+    fn service_id(&self) -> u16 {
+        SERVICE_ID
+    }
+
+    fn tx_from_raw(&self, raw: RawTransaction) -> Result<Box<Transaction>, encoding::Error> {
+        let tx = TimestampServiceTransactions::tx_from_raw(raw)?;
+        Ok(tx.into())
+    }
+
+    fn state_hash(&self, _: &Snapshot) -> Vec<Hash> {
+        Vec::new()
+    }
+
+    fn public_api_handler(&self, ctx: &ApiContext) -> Option<Box<Handler>> {
+        let mut router = Router::new();
+        let api = TimestampApi {
+            channel: ctx.node_channel().clone(),
+            blockchain: ctx.blockchain().clone(),
+        };
+        api.wire(&mut router);
+        Some(Box::new(router))
+    }
 }
