@@ -35,6 +35,8 @@ use router::Router;
 
 const SERVICE_ID: u16 = 13;
 
+// base data types.
+// A timestamp contains a public key, a hash of a document/content, time (UNIX time)
 encoding_struct! {
     struct Timestamp {
         pub_key: &PublicKey,
@@ -43,6 +45,8 @@ encoding_struct! {
     }
 }
 
+// Any blockchain operation should be expressed as a transaction. In this case it is described with
+// the service's ID, a public key and data
 transactions! {
     TimestampServiceTransactions {
         const SERVICE_ID = SERVICE_ID;
@@ -54,6 +58,9 @@ transactions! {
     }
 }
 
+// Each transaction implements two basic operations:
+// verify - logical check BEFORE commiting to blockchain. In this case we verify senders ID
+// execute - storing a new timestamp withn blockchain
 impl Transaction for TxTimestamp {
     fn verify(&self) -> bool {
         self.verify_signature(self.from())
@@ -72,16 +79,20 @@ impl Transaction for TxTimestamp {
     }
 }
 
+// To interact with blockchain we should define two views: for reading and writing data
+// interface
 pub struct TimestampSchema<T> {
     view: T,
 }
 
+// this one allows as to modify blockchain data
 impl<'a> TimestampSchema<&'a mut Fork> {
     pub fn timestamps_mut(&mut self) -> MapIndex<&mut Fork, PublicKey, Timestamp> {
         MapIndex::new("timestamp.timestamps", &mut self.view)
     }
 }
 
+// this one is read-only and provides access to a blockchain snapshot
 impl<T: AsRef<Snapshot>> TimestampSchema<T> {
     pub fn new(view: T) -> Self {
         TimestampSchema { view }
@@ -96,17 +107,20 @@ impl<T: AsRef<Snapshot>> TimestampSchema<T> {
     }
 }
 
+// basic type to get REST response
 #[derive(Serialize, Deserialize)]
 pub struct TimestampResponse {
     pub tx_hash: Hash,
 }
 
+// Interface for system's backend
 #[derive(Clone)]
 struct TimestampApi {
     channel: ApiSender,
     blockchain: Blockchain,
 }
 
+// Registering handlers for REST API. We define 4 endpoints
 impl Api for TimestampApi {
     fn wire(&self, router: &mut Router) {
         self.clone().set_timestamp(router);
@@ -117,8 +131,8 @@ impl Api for TimestampApi {
 }
 
 impl TimestampApi {
+    // helpers to register all endpoints
     fn set_timestamp(self, router: &mut Router) {
-        println!("ololo");
         let timestamp = move |req: &mut Request| self.timestamp(req);
         router.get("/v1/timestamp/:pub_key", timestamp, "timestamp");
     }
@@ -138,6 +152,10 @@ impl TimestampApi {
         router.get("/v1/block_stats/:id", stats, "block_stats");
     }
 
+    // Endpoint for creating a new timestamp.
+    // Input: a transaction in JSON format
+    // Effect: serializes the input into TxTransaction, stores it into a blockchain
+    // Return value: transaction's hash
     fn submit(&self, req: &mut Request) -> IronResult<Response> {
         match req.get::<bodyparser::Struct<TimestampServiceTransactions>>() {
             Ok(Some(transaction)) => {
@@ -152,6 +170,10 @@ impl TimestampApi {
         }
     }
 
+    // Endpoint for searching for specific transaction.
+    // Input: a public key
+    // Effect: Finds a transaction by its public key
+    // Return value: a transaction data in JSON
     fn timestamp(&self, req: &mut Request) -> IronResult<Response> {
         let path = req.url.path();
         let public_key = PublicKey::from_hex(path.last().unwrap()).map_err(
@@ -178,6 +200,10 @@ impl TimestampApi {
         }
     }
 
+    // Endpoint for listing all available transactions.
+    // Input: N/A
+    // Effect: gets a blockchain's snapshot and gathers all transactions
+    // Return value: list of transactions
     fn timestamps(&self, _: &mut Request) -> IronResult<Response> {
         let snapshot = self.blockchain.snapshot();
         let schema = TimestampSchema::new(snapshot);
@@ -187,6 +213,10 @@ impl TimestampApi {
         self.ok_response(&serde_json::to_value(&timestamps).unwrap())
     }
 
+    // Endpoint for searching for a specific trasactions block.
+    // Input: Block ID
+    // Effect: Creates a blockchain explorer, which is used to find a block
+    // Return value: list of transactions within a block
     fn block_stats(&self, req: &mut Request) -> IronResult<Response> {
         let path = req.url.path();
         let block_id = exonum::helpers::Height(path.last().unwrap().parse::<u64>().unwrap());
@@ -206,9 +236,11 @@ impl TimestampApi {
     }
 }
 
+// Exonum model relies on introducing various public services to interact with blockchain
 pub struct TimestampService;
 
 impl Service for TimestampService {
+    // mandatory identifications
     fn service_name(&self) -> &'static str {
         "timestamp"
     }
@@ -222,10 +254,12 @@ impl Service for TimestampService {
         Ok(tx.into())
     }
 
+    // not used
     fn state_hash(&self, _: &Snapshot) -> Vec<Hash> {
         Vec::new()
     }
 
+    // setup REST API
     fn public_api_handler(&self, ctx: &ApiContext) -> Option<Box<Handler>> {
         let mut router = Router::new();
         let api = TimestampApi {

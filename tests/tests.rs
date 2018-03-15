@@ -2,9 +2,9 @@ extern crate exonum;
 #[macro_use]
 extern crate exonum_testkit;
 
-extern crate serde_json;
-
 extern crate timestamping;
+
+extern crate serde_json;
 
 use exonum::blockchain::Schema;
 use exonum::crypto;
@@ -31,7 +31,7 @@ fn test_submit_basic() {
     // Commit them into blockchain.
     testkit.create_block_with_transactions(
         txvec![tx1.clone(), tx2.clone(), tx3.clone()]
-    );
+        );
 
     // Check results with schema.
     let snapshot = testkit.snapshot();
@@ -120,5 +120,6 @@ fn test_submit_get_block_by_id() {
 
     assert!(res.is_string());
     assert!(!res.as_str().unwrap().contains("not found"));
-
 }
+
+
