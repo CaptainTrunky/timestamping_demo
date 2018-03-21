@@ -23,7 +23,7 @@ use exonum::encoding::serialize::FromHex;
 use exonum::explorer::BlockchainExplorer;
 use exonum::messages::{Message, RawTransaction};
 use exonum::node::{ApiSender, TransactionSend};
-use exonum::storage::{Fork, MapIndex, Snapshot};
+use exonum::storage::{Fork, ProofMapIndex, Snapshot};
 
 use iron::prelude::*;
 use iron::Handler;
@@ -87,8 +87,8 @@ pub struct TimestampSchema<T> {
 
 // this one allows as to modify blockchain data
 impl<'a> TimestampSchema<&'a mut Fork> {
-    pub fn timestamps_mut(&mut self) -> MapIndex<&mut Fork, PublicKey, Timestamp> {
-        MapIndex::new("timestamp.timestamps", &mut self.view)
+    pub fn timestamps_mut(&mut self) -> ProofMapIndex<&mut Fork, PublicKey, Timestamp> {
+        ProofMapIndex::new("timestamp.timestamps", &mut self.view)
     }
 }
 
@@ -98,12 +98,16 @@ impl<T: AsRef<Snapshot>> TimestampSchema<T> {
         TimestampSchema { view }
     }
 
-    pub fn timestamps(&self) -> MapIndex<&Snapshot, PublicKey, Timestamp> {
-        MapIndex::new("timestamp.timestamps", self.view.as_ref())
+    pub fn timestamps(&self) -> ProofMapIndex<&Snapshot, PublicKey, Timestamp> {
+        ProofMapIndex::new("timestamp.timestamps", self.view.as_ref())
     }
 
     pub fn timestamp(&self, pub_key: &PublicKey) -> Option<Timestamp> {
         self.timestamps().get(pub_key)
+    }
+
+    pub fn state_hash(&self) -> Vec<Hash> {
+        vec![self.timestamps().root_hash()]
     }
 }
 
@@ -254,9 +258,9 @@ impl Service for TimestampService {
         Ok(tx.into())
     }
 
-    // not used
-    fn state_hash(&self, _: &Snapshot) -> Vec<Hash> {
-        Vec::new()
+    fn state_hash(&self, snapshot: &Snapshot) -> Vec<Hash> {
+        let schema = TimestampSchema::new(snapshot);
+        schema.state_hash()
     }
 
     // setup REST API
